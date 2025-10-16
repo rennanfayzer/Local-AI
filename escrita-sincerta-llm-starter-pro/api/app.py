@@ -12,6 +12,8 @@ from tools.history import (
     rename_project as rename_project_in_history,
     get_conversation_history,
     save_conversation_history,
+    list_conversations,
+    create_conversation,
 )
 from tools.project_writer import (
     get_project_files,
@@ -130,6 +132,9 @@ class ProjectRequest(BaseModel):
 class RenameProjectRequest(BaseModel):
     new_project_name: str
 
+class ConversationRequest(BaseModel):
+    conversation_name: str
+
 # Utilitários para Ollama com roteamento inteligente
 async def ollama_chat_with_routing(model: str, messages: List[Dict[str, str]], stream: bool = False, 
                                   routing_context: Dict[str, Any] = None) -> tuple[str, Dict[str, Any]]:
@@ -247,9 +252,15 @@ async def rename_project(project_name: str, request: RenameProjectRequest):
 @app.get("/projects/{project_name}/conversations", response_model=List[str])
 async def list_project_conversations(project_name: str):
     """Lista todas as conversas de um projeto."""
-    # Esta função precisa ser adicionada em `tools.history`
-    from tools.history import list_conversations
     return list_conversations(project_name)
+
+@app.post("/projects/{project_name}/conversations")
+async def create_conversation_endpoint(project_name: str, request: ConversationRequest):
+    """Cria uma nova conversa dentro de um projeto."""
+    success = create_conversation(project_name, request.conversation_name)
+    if not success:
+        raise HTTPException(status_code=400, detail="Conversa já existe ou falha ao criar.")
+    return {"status": "success", "project_name": project_name, "conversation_name": request.conversation_name}
 
 @app.get("/history/{project_name}/{conversation_name}", response_model=List[Dict[str, Any]])
 async def get_history(project_name: str, conversation_name: str):
@@ -413,28 +424,27 @@ async def chat_endpoint(request: ChatRequest):
 class TaskRequest(BaseModel):
     agent: str
     prompt: str
-    project_name: str # Para dar contexto ao agente
-    step: int # Para referência
+    project_name: str
+    conversation_name: str
+    step: int
 
 @app.post("/execute_task")
 async def execute_task_endpoint(request: TaskRequest):
     """Executa uma única tarefa de um plano usando um agente específico."""
     try:
-        # O histórico é construído a partir do projeto atual para dar contexto
-        history = get_conversation_history(request.project_name)
+        history = get_conversation_history(request.project_name, request.conversation_name)
         
-        # O 'message' aqui é o prompt detalhado do passo do plano
         reply = await execute_agent_task(
             agent_name=request.agent,
             message=request.prompt,
             history=history,
-            context={"project_name": request.project_name}
+            context={"project_name": request.project_name, "conversation_name": request.conversation_name}
         )
         
-        # Salva o resultado da execução no histórico do projeto
-        history.append({"role": "user", "content": f"Executando tarefa: {request.prompt}"})
+        # Adiciona a execução ao histórico
+        history.append({"role": "user", "content": f"Executando Passo {request.step}: {request.prompt}"})
         history.append({"role": "assistant", "content": reply})
-        save_conversation_history(request.project_name, history)
+        save_conversation_history(request.project_name, request.conversation_name, history)
 
         return {"status": "success", "reply": reply}
     except Exception as e:

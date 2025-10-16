@@ -30,6 +30,8 @@ const HomePage: React.FC = () => {
   const [input, setInput] = useState('');
   const [projects, setProjects] = useState<string[]>([]);
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(null);
+  const [conversations, setConversations] = useState<string[]>([]);
+  const [currentConversationName, setCurrentConversationName] = useState<string | null>(null);
   const [agents, setAgents] = useState<string[]>([]);
   const [currentAgent, setCurrentAgent] = useState<string>('orchestrator');
   const [executionPlan, setExecutionPlan] = useState<ExecutionPlan | null>(null);
@@ -42,6 +44,32 @@ const HomePage: React.FC = () => {
     }
   };
 
+  const handleCreateNewConversation = async () => {
+    if (!currentProjectName) {
+      alert("Por favor, selecione um projeto primeiro.");
+      return;
+    }
+    const newConversationName = prompt("Digite o nome da nova conversa:");
+    if (newConversationName && newConversationName.trim()) {
+      try {
+        const response = await fetch(`http://localhost:8000/projects/${currentProjectName}/conversations`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ conversation_name: newConversationName }),
+        });
+        if (response.ok) {
+          await fetchConversations(currentProjectName);
+          setCurrentConversationName(newConversationName);
+        } else {
+          const errorData = await response.json();
+          alert(`Erro ao criar conversa: ${errorData.detail}`);
+        }
+      } catch (error: any) {
+        alert(`Erro ao criar conversa: ${error.message}`);
+      }
+    }
+  };
+
   useEffect(() => {
     scrollToBottom();
   }, [messages, executionPlan]);
@@ -50,6 +78,23 @@ const HomePage: React.FC = () => {
     fetchProjects();
     fetchAgents();
   }, []);
+
+  useEffect(() => {
+    if (currentProjectName) {
+      fetchConversations(currentProjectName);
+    } else {
+      setConversations([]);
+      setCurrentConversationName(null);
+    }
+  }, [currentProjectName]);
+
+  useEffect(() => {
+    if (currentProjectName && currentConversationName) {
+      fetchHistory(currentProjectName, currentConversationName);
+    } else {
+      setMessages([{ role: 'assistant', content: 'Selecione um projeto e uma conversa para começar.' }]);
+    }
+  }, [currentProjectName, currentConversationName]);
 
   const fetchAgents = async () => {
     try {
@@ -77,6 +122,37 @@ const HomePage: React.FC = () => {
       }
     } catch (error) {
       console.error("Failed to fetch projects:", error);
+    }
+  };
+
+  const fetchConversations = async (projectName: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/projects/${projectName}/conversations`);
+      if (!response.ok) throw new Error('Failed to fetch conversations');
+      const data = await response.json();
+      setConversations(data);
+      if (data.length > 0) {
+        setCurrentConversationName(data[0]);
+      } else {
+        setCurrentConversationName(null);
+      }
+    } catch (error) {
+      console.error("Failed to fetch conversations:", error);
+    }
+  };
+
+  const fetchHistory = async (projectName: string, conversationName: string) => {
+    try {
+      const response = await fetch(`http://localhost:8000/history/${projectName}/${conversationName}`);
+      if (!response.ok) throw new Error('Failed to fetch history');
+      const data = await response.json();
+      if (data.length > 0) {
+        setMessages(data);
+      } else {
+        setMessages([{ role: 'assistant', content: 'Nova conversa iniciada. Envie uma mensagem!' }]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch history:", error);
     }
   };
 
@@ -149,7 +225,7 @@ const HomePage: React.FC = () => {
   };
 
   const handleSendMessage = async () => {
-    if (!input.trim() || !currentProjectName || isLoading) return;
+    if (!input.trim() || !currentProjectName || !currentConversationName || isLoading) return;
 
     const newMessages = [...messages, { role: 'user', content: input }];
     setMessages(newMessages);
@@ -164,9 +240,12 @@ const HomePage: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           agent: currentAgent,
-          message: currentInput,
+          message: currentInput, // Corrigido: `message` no nível raiz
           history: newMessages.slice(-10),
-          project_name: currentProjectName,
+          context: {
+            project_name: currentProjectName,
+            conversation_name: currentConversationName,
+          }
         }),
       });
 
@@ -175,21 +254,9 @@ const HomePage: React.FC = () => {
       const data = await response.json();
       const replyContent = data.reply;
 
-      try {
-        const parsedReply = JSON.parse(replyContent);
-        if (parsedReply && typeof parsedReply === 'object' && Array.isArray(parsedReply.plan)) {
-          const planWithStatus: ExecutionPlan = {
-            ...parsedReply,
-            plan: parsedReply.plan.map((step: any) => ({ ...step, status: 'pending' }))
-          };
-          setExecutionPlan(planWithStatus);
-          setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: `Plano recebido para o objetivo: "${planWithStatus.goal}".` }]);
-        } else {
-          setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: replyContent }]);
-        }
-      } catch (e) {
-        setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: replyContent }]);
-      }
+      const finalMessages = [...newMessages, { role: 'assistant', content: replyContent }];
+      setMessages(finalMessages);
+
     } catch (error: any) {
       console.error("Failed to send message:", error);
       setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: `Error: ${error.message}` }]);
@@ -198,8 +265,25 @@ const HomePage: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const saveHistory = async () => {
+      if (currentProjectName && currentConversationName && messages.length > 1) {
+        try {
+          await fetch(`http://localhost:8000/history/${currentProjectName}/${currentConversationName}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(messages),
+          });
+        } catch (error) {
+          console.error("Failed to save history:", error);
+        }
+      }
+    };
+    saveHistory();
+  }, [messages, currentProjectName, currentConversationName]);
+
   const handleExecuteStep = async (stepToExecute: PlanStep) => {
-    if (!currentProjectName) return;
+    if (!currentProjectName || !currentConversationName) return;
 
     // Atualiza o status do passo para 'in-progress'
     setExecutionPlan(prevPlan => {
@@ -219,8 +303,10 @@ const HomePage: React.FC = () => {
         },
         body: JSON.stringify({
           project_name: currentProjectName,
-          task: stepToExecute,
-          history: messages.slice(-10),
+          conversation_name: currentConversationName,
+          prompt: stepToExecute.prompt,
+          agent: stepToExecute.agent,
+          step: stepToExecute.step
         }),
       });
 
@@ -320,7 +406,23 @@ const HomePage: React.FC = () => {
         {/* ChatView */}
         <div className="flex flex-col bg-background">
           <header className="bg-background p-4 border-b flex justify-between items-center z-10 shadow-sm">
-            <h2 className="text-lg font-semibold">{currentProjectName || "Selecione um Projeto"}</h2>
+            <div className="flex items-center gap-4">
+              <h2 className="text-lg font-semibold">{currentProjectName || "Selecione um Projeto"}</h2>
+              {currentProjectName && (
+                <select
+                  value={currentConversationName || ''}
+                  onChange={(e) => setCurrentConversationName(e.target.value)}
+                  className="bg-background border rounded-md p-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                  disabled={conversations.length === 0}
+                >
+                  {conversations.map(conv => <option key={conv} value={conv}>{conv}</option>)}
+                </select>
+              )}
+              <Button variant="outline" size="sm" onClick={handleCreateNewConversation}>
+                <PlusCircle className="mr-2 h-4 w-4" />
+                Nova Conversa
+              </Button>
+            </div>
             <div className="flex items-center space-x-2">
               <label htmlFor="agent-selector" className="text-sm text-muted-foreground">Agente:</label>
               <select

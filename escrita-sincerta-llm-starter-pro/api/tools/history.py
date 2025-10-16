@@ -113,3 +113,11 @@ def save_conversation_history(project_name: str, conversation_name: str, history
     except IOError as e:
         logger.error(f"Erro ao salvar histórico '{conversation_name}' para o projeto '{project_name}': {e}")
         return False
+
+def create_conversation(project_name: str, conversation_name: str) -> bool:
+    """Cria um novo arquivo de conversa (vazio) dentro de um projeto."""
+    conversation_path = os.path.join(_get_conversations_dir(project_name), f"{conversation_name}.json")
+    if os.path.exists(conversation_path):
+        logger.warning(f"Tentativa de criar uma conversa que já existe: '{conversation_name}' no projeto '{project_name}'")
+        return False
+    return save_conversation_history(project_name, conversation_name, [])
