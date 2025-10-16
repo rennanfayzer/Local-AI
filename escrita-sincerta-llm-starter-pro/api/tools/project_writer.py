@@ -116,3 +116,26 @@ def get_project_files(project_name: str) -> dict:
         logger.error(f"Erro ao listar arquivos do projeto '{project_name}': {e}")
         return {"error": "Erro interno ao processar a estrutura de arquivos."}
 
+
+def delete_generated_project(project_name: str) -> bool:
+    """
+    Deleta o diretório de um projeto gerado.
+    """
+    try:
+        import shutil
+        project_path = _get_safe_path(project_name)
+
+        if not project_path.is_dir():
+            logger.warning(f"Tentativa de deletar um projeto gerado que não existe: '{project_name}'")
+            # Retorna True porque o estado desejado (projeto não existe) foi alcançado
+            return True
+
+        shutil.rmtree(project_path)
+        logger.info(f"Projeto gerado '{project_name}' deletado com sucesso de {project_path}")
+        return True
+    except PermissionError as e:
+        logger.error(f"Erro de segurança ao tentar deletar o projeto gerado '{project_name}': {e}")
+        return False
+    except Exception as e:
+        logger.error(f"Erro inesperado ao deletar o projeto gerado '{project_name}': {e}")
+        return False
