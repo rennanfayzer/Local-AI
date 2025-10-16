@@ -1,35 +1,75 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
+import { Send, Edit, PlusCircle, Bot, User, Loader2 } from 'lucide-react';
+
 import FileTree from '../components/FileTree';
-import Button from '../components/Button';
-import Heading from '../components/Heading';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 
-const SendIcon = () => (
-  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <path d="M10 14L21 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-    <path d="M21 3L14.5 21L10 14L3 9.5L21 3Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-  </svg>
-);
 
+// Tipagem para o plano de execução
+interface PlanStep {
+  step: number;
+  agent: string;
+  prompt: string;
+  status?: 'pending' | 'in-progress' | 'completed' | 'failed';
+}
+
+interface ExecutionPlan {
+  goal: string;
+  plan: PlanStep[];
+}
 
 const HomePage: React.FC = () => {
   const [messages, setMessages] = useState([
-    { role: 'assistant', content: 'Olá! Como posso ajudar você hoje?' }
+    { role: 'assistant', content: 'Olá! Sou seu assistente de IA. Como posso ajudar a construir algo incrível hoje?' }
   ]);
   const [input, setInput] = useState('');
   const [projects, setProjects] = useState<string[]>([]);
   const [currentProjectName, setCurrentProjectName] = useState<string | null>(null);
+  const [agents, setAgents] = useState<string[]>([]);
+  const [currentAgent, setCurrentAgent] = useState<string>('orchestrator');
+  const [executionPlan, setExecutionPlan] = useState<ExecutionPlan | null>(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+
+  const scrollToBottom = () => {
+    if (scrollAreaRef.current) {
+      scrollAreaRef.current.children[0].scrollTop = scrollAreaRef.current.children[0].scrollHeight;
+    }
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, executionPlan]);
 
   useEffect(() => {
     fetchProjects();
+    fetchAgents();
   }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const response = await fetch('http://localhost:8000/agents');
+      if (!response.ok) throw new Error('Failed to fetch agents');
+      const data = await response.json();
+      const agentNames = data.map((agent: any) => agent.name);
+      setAgents(agentNames);
+      if (agentNames.length > 0) {
+        setCurrentAgent(agentNames.includes('orchestrator') ? 'orchestrator' : agentNames[0]);
+      }
+    } catch (error) {
+      console.error("Failed to fetch agents:", error);
+    }
+  };
 
   const fetchProjects = async () => {
     try {
       const response = await fetch('http://localhost:8000/projects');
-      if (!response.ok) {
-        throw new Error('Failed to fetch projects');
-      }
+      if (!response.ok) throw new Error('Failed to fetch projects');
       const data = await response.json();
       setProjects(data);
       if (data.length > 0 && !currentProjectName) {
@@ -42,138 +82,303 @@ const HomePage: React.FC = () => {
 
   const handleCreateNewProject = async () => {
     const newProjectName = prompt("Digite o nome do novo projeto:");
-    if (newProjectName) {
+    if (newProjectName && newProjectName.trim()) {
       try {
         const response = await fetch('http://localhost:8000/projects', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
+          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ project_name: newProjectName }),
         });
         if (response.ok) {
-          fetchProjects();
+          await fetchProjects();
           setCurrentProjectName(newProjectName);
-          setMessages([{ role: 'assistant', content: `Projeto '${newProjectName}' criado. Você pode começar a trabalhar nele agora.` }]);
+          setMessages([{ role: 'assistant', content: `Projeto '${newProjectName}' criado. Vamos começar!` }]);
         } else {
           const errorData = await response.json();
           alert(`Erro ao criar projeto: ${errorData.detail}`);
         }
-      } catch (error) {
+      } catch (error: any) {
         console.error("Failed to create project:", error);
         alert(`Erro ao criar projeto: ${error.message}`);
       }
     }
   };
-  
+
+  const handleRenameProject = async (oldName: string) => {
+    const newName = prompt(`Digite o novo nome para o projeto "${oldName}":`, oldName);
+    if (newName && newName.trim() && newName !== oldName) {
+      try {
+        const response = await fetch(`http://localhost:8000/projects/${oldName}/rename`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ new_project_name: newName }),
+        });
+        if (response.ok) {
+          await fetchProjects();
+          setCurrentProjectName(newName);
+        } else {
+          const errorData = await response.json();
+          alert(`Erro ao renomear projeto: ${errorData.detail}`);
+        }
+      } catch (error: any) {
+        alert(`Erro ao renomear projeto: ${error.message}`);
+      }
+    }
+  };
+
   const handleSendMessage = async () => {
-    if (!input.trim() || !currentProjectName) return;
+    if (!input.trim() || !currentProjectName || isLoading) return;
 
     const newMessages = [...messages, { role: 'user', content: input }];
     setMessages(newMessages);
     const currentInput = input;
     setInput('');
+    setExecutionPlan(null);
+    setIsLoading(true);
 
     try {
       const response = await fetch('http://localhost:8000/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          agent: currentAgent,
+          message: currentInput,
+          history: newMessages.slice(-10),
+          project_name: currentProjectName,
+        }),
+      });
+
+      if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
+
+      const data = await response.json();
+      const replyContent = data.reply;
+
+      try {
+        const parsedReply = JSON.parse(replyContent);
+        if (parsedReply && typeof parsedReply === 'object' && Array.isArray(parsedReply.plan)) {
+          const planWithStatus: ExecutionPlan = {
+            ...parsedReply,
+            plan: parsedReply.plan.map((step: any) => ({ ...step, status: 'pending' }))
+          };
+          setExecutionPlan(planWithStatus);
+          setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: `Plano recebido para o objetivo: "${planWithStatus.goal}".` }]);
+        } else {
+          setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: replyContent }]);
+        }
+      } catch (e) {
+        setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: replyContent }]);
+      }
+    } catch (error: any) {
+      console.error("Failed to send message:", error);
+      setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: `Error: ${error.message}` }]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleExecuteStep = async (stepToExecute: PlanStep) => {
+    if (!currentProjectName) return;
+
+    // Atualiza o status do passo para 'in-progress'
+    setExecutionPlan(prevPlan => {
+      if (!prevPlan) return null;
+      const newPlan = { ...prevPlan };
+      newPlan.plan = newPlan.plan.map(step => 
+        step.step === stepToExecute.step ? { ...step, status: 'in-progress' } : step
+      );
+      return newPlan;
+    });
+
+    try {
+      const response = await fetch('http://localhost:8000/execute_task', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          agent: 'dev_fullstack', // Hardcoded for now, will be dynamic later
-          message: currentInput,
-          history: newMessages.slice(-10), // Send last 10 messages for context
           project_name: currentProjectName,
+          task: stepToExecute,
+          history: messages.slice(-10),
         }),
       });
 
+      const data = await response.json();
+
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        throw new Error(data.detail || `HTTP error! status: ${response.status}`);
       }
 
-      const data = await response.json();
+      // Adiciona a resposta da execução ao chat
       setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: data.reply }]);
-    } catch (error) {
-      console.error("Failed to send message:", error);
-      setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: `Error: ${error.message}` }]);
+      
+      // Atualiza o status do passo para 'completed'
+      setExecutionPlan(prevPlan => {
+        if (!prevPlan) return null;
+        const newPlan = { ...prevPlan };
+        newPlan.plan = newPlan.plan.map(step => 
+          step.step === stepToExecute.step ? { ...step, status: 'completed' } : step
+        );
+        return newPlan;
+      });
+
+    } catch (error: any) {
+      console.error("Failed to execute step:", error);
+      // Adiciona a mensagem de erro ao chat
+      setMessages(prevMessages => [...prevMessages, { role: 'assistant', content: `Erro ao executar passo ${stepToExecute.step}: ${error.message}` }]);
+      
+      // Atualiza o status do passo para 'failed'
+      setExecutionPlan(prevPlan => {
+        if (!prevPlan) return null;
+        const newPlan = { ...prevPlan };
+        newPlan.plan = newPlan.plan.map(step => 
+          step.step === stepToExecute.step ? { ...step, status: 'failed' } : step
+        );
+        return newPlan;
+      });
+    }
+  };
+
+  const handleExecuteFullPlan = async () => {
+    if (!executionPlan) return;
+
+    for (const step of executionPlan.plan) {
+      // Apenas executa passos pendentes
+      if (step.status === 'pending') {
+        await handleExecuteStep(step);
+      }
     }
   };
 
   return (
     <>
       <Head>
-        <title>Escrita Sincerta - Chat</title>
+        <title>Escrita Sincerta - Chat Profissional</title>
       </Head>
-      <div className="flex h-screen w-full bg-zinc-950 text-zinc-50 font-sans">
-        {/* Coluna da Esquerda (Sidebar) */}
-        <aside className="w-1/4 max-w-xs bg-zinc-900 p-4 border-r border-zinc-800 flex flex-col">
-          <Heading as="h1" className="text-lg mb-4">Projetos</Heading>
-          <div className="flex-1 overflow-y-auto">
-            <div className="flex flex-col space-y-2">
+      <div className="grid grid-cols-[280px_1fr_320px] h-screen w-full bg-secondary text-foreground font-sans">
+        {/* Sidebar */}
+        <aside className="flex flex-col bg-background border-r p-4 space-y-4">
+          <h1 className="text-xl font-semibold px-2">Projetos</h1>
+          <ScrollArea className="flex-1 -mr-4 pr-4">
+            <div className="flex flex-col space-y-1">
               {projects.map(project => (
-                <Button 
-                  key={project}
-                  variant={project === currentProjectName ? 'default' : 'ghost'} 
-                  className="justify-start text-left"
-                  onClick={() => setCurrentProjectName(project)}
-                >
-                  {project}
-                </Button>
+                <div key={project} className="group flex items-center">
+                  <Button
+                    variant={project === currentProjectName ? 'secondary' : 'ghost'}
+                    className="justify-start text-left flex-1 w-full truncate"
+                    onClick={() => setCurrentProjectName(project)}
+                  >
+                    {project}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="ml-2 h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handleRenameProject(project)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </div>
               ))}
             </div>
-          </div>
-           <Button variant="outline" onClick={handleCreateNewProject}>Novo Projeto</Button>
+          </ScrollArea>
+          <Button variant="outline" className="mt-auto" onClick={handleCreateNewProject}>
+            <PlusCircle className="mr-2 h-4 w-4" />
+            Novo Projeto
+          </Button>
         </aside>
 
-        {/* Coluna do Meio (ChatView) */}
-        <div className="flex-1 flex flex-col bg-zinc-900">
-          <header className="bg-zinc-950 p-4 border-b border-zinc-800 flex justify-between items-center">
-            <Heading as="h2" className="border-b-0 pb-0">{currentProjectName || "Nenhum projeto selecionado"}</Heading>
+        {/* ChatView */}
+        <div className="flex flex-col bg-background">
+          <header className="bg-background p-4 border-b flex justify-between items-center z-10 shadow-sm">
+            <h2 className="text-lg font-semibold">{currentProjectName || "Selecione um Projeto"}</h2>
+            <div className="flex items-center space-x-2">
+              <label htmlFor="agent-selector" className="text-sm text-muted-foreground">Agente:</label>
+              <select
+                id="agent-selector"
+                value={currentAgent}
+                onChange={(e) => setCurrentAgent(e.target.value)}
+                className="bg-background border rounded-md p-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+              >
+                {agents.map(agent => <option key={agent} value={agent}>{agent}</option>)}
+              </select>
+            </div>
           </header>
-          <main className="flex-1 p-6 overflow-y-auto space-y-6">
-            {messages.map((msg, index) => (
-              <div key={index} className={`flex items-start space-x-4 ${msg.role === 'user' ? 'justify-end' : ''}`}>
-                {msg.role === 'assistant' && <span className="text-2xl">🤖</span>}
-                <div className={`rounded-lg p-3 ${msg.role === 'user' ? 'bg-blue-600' : 'bg-zinc-800'}`}>
-                  <p>{msg.content}</p>
-                </div>
-                {msg.role === 'user' && <span className="text-2xl">👤</span>}
+          <main className="flex-1 p-6 overflow-y-hidden">
+            <ScrollArea className="h-full" ref={scrollAreaRef}>
+              <div className="space-y-6 pr-4">
+                {messages.map((msg, index) => (
+                  <div key={index} className={`flex items-start gap-3 ${msg.role === 'user' ? 'justify-end' : ''}`}>
+                    {msg.role === 'assistant' && <Avatar className="w-8 h-8"><AvatarFallback><Bot size={20}/></AvatarFallback></Avatar>}
+                    <div className={`rounded-lg p-3 max-w-2xl text-sm ${msg.role === 'user' ? 'bg-primary text-primary-foreground' : 'bg-secondary'}`}>
+                      <p className="whitespace-pre-wrap">{msg.content}</p>
+                    </div>
+                    {msg.role === 'user' && <Avatar className="w-8 h-8"><AvatarFallback><User size={20}/></AvatarFallback></Avatar>}
+                  </div>
+                ))}
+                {isLoading && (
+                  <div className="flex items-start gap-3">
+                    <Avatar className="w-8 h-8"><AvatarFallback><Bot size={20}/></AvatarFallback></Avatar>
+                    <div className="rounded-lg p-3 bg-secondary flex items-center space-x-2">
+                       <Loader2 className="h-5 w-5 animate-spin" />
+                       <span>Pensando...</span>
+                    </div>
+                  </div>
+                )}
+                {executionPlan && (
+                  <Card className="bg-secondary border-border">
+                    <CardHeader>
+                      <CardTitle>Plano de Execução</CardTitle>
+                      <CardDescription>{executionPlan.goal}</CardDescription>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {executionPlan.plan.map((step) => (
+                        <div key={step.step} className="p-3 rounded-md border bg-background/50">
+                          <div className="flex justify-between items-center">
+                            <div className="flex-1">
+                              <p className="font-semibold">Passo {step.step}: <span className="font-mono text-primary/80">{step.agent}</span></p>
+                              <p className="text-sm text-muted-foreground mt-1">{step.prompt}</p>
+                            </div>
+                            <Button variant="outline" size="sm" onClick={() => handleExecuteStep(step)}>
+                              Executar
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                )}
               </div>
-            ))}
+            </ScrollArea>
           </main>
-          <footer className="p-4 bg-zinc-950 border-t border-zinc-800">
+          <footer className="p-4 bg-background border-t">
             <div className="relative">
-              <input
-                type="text"
-                placeholder="Digite sua mensagem..."
-                className="w-full p-3 pr-12 rounded-lg bg-zinc-800 border border-zinc-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <Input
+                placeholder="Converse com o agente..."
+                className="pr-12 h-12"
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault();
-                    handleSendMessage();
-                  }
-                }}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); } }}
+                disabled={isLoading}
               />
-              <Button variant="ghost" size="sm" className="absolute right-2 top-1/2 -translate-y-1/2" onClick={handleSendMessage}>
-                <SendIcon />
+              <Button variant="ghost" size="icon" className="absolute right-3 top-1/2 -translate-y-1/2" onClick={handleSendMessage} disabled={isLoading}>
+                <Send className="h-5 w-5" />
               </Button>
             </div>
           </footer>
         </div>
 
-        {/* Coluna da Direita (File Explorer) */}
-        <aside className="w-1/3 max-w-md bg-zinc-950 p-4 border-l border-zinc-800 overflow-y-auto">
-          <Heading as="h3" className="mb-4 border-b-0 pb-0">Explorador de Arquivos</Heading>
-          {currentProjectName ? (
-            <FileTree projectName={currentProjectName} />
-          ) : (
-            <div className="flex items-center justify-center h-full">
-              <p className="text-zinc-500">Nenhum projeto selecionado.</p>
-            </div>
-          )}
+        {/* File Explorer */}
+        <aside className="bg-background border-l p-4">
+          <h3 className="text-lg font-semibold mb-4">Explorador de Arquivos</h3>
+          <ScrollArea className="h-full -mr-4 pr-4">
+            {currentProjectName ? (
+              <FileTree projectName={currentProjectName} />
+            ) : (
+              <div className="flex items-center justify-center h-full">
+                <p className="text-muted-foreground">Selecione um projeto.</p>
+              </div>
+            )}
+          </ScrollArea>
         </aside>
       </div>
     </>

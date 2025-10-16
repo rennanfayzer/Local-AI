@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 
 // Tipagem para a estrutura de arquivos que a API retorna
@@ -24,10 +23,15 @@ const FileTree: React.FC<FileTreeProps> = ({ projectName }) => {
       try {
         const response = await fetch(`http://localhost:8000/generated-projects/${projectName}`);
         if (!response.ok) {
-          throw new Error(`Failed to fetch file tree: ${response.statusText}`);
+          if (response.status === 404) {
+            setFiles(null); // Projeto existe, mas não tem arquivos
+          } else {
+            throw new Error(`Failed to fetch file tree: ${response.statusText}`);
+          }
+        } else {
+            const data = await response.json();
+            setFiles(data.files);
         }
-        const data = await response.json();
-        setFiles(data.files);
       } catch (err) {
         setError(err instanceof Error ? err.message : 'An unknown error occurred');
         setFiles(null);

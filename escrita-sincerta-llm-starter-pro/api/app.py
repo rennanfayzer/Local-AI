@@ -9,6 +9,7 @@ from tools.history import (
     get_projects as get_projects_from_history,
     create_project as create_project_in_history,
     delete_project as delete_project_from_history,
+    rename_project as rename_project_in_history,
     get_conversation_history,
     save_conversation_history,
 )
@@ -124,6 +125,9 @@ class AgentInfo(BaseModel):
 class ProjectRequest(BaseModel):
     project_name: str
 
+class RenameProjectRequest(BaseModel):
+    new_project_name: str
+
 # Utilitários para Ollama com roteamento inteligente
 async def ollama_chat_with_routing(model: str, messages: List[Dict[str, str]], stream: bool = False, 
                                   routing_context: Dict[str, Any] = None) -> tuple[str, Dict[str, Any]]:
@@ -229,6 +233,14 @@ async def delete_project(project_name: str):
         raise HTTPException(status_code=404, detail="Projeto não encontrado ou falha ao deletar.")
     return {"status": "success", "project_name": project_name}
 
+@app.post("/projects/{project_name}/rename")
+async def rename_project(project_name: str, request: RenameProjectRequest):
+    """Renomeia um projeto de conversa."""
+    success = rename_project_in_history(project_name, request.new_project_name)
+    if not success:
+        raise HTTPException(status_code=400, detail="Falha ao renomear o projeto. Verifique se o novo nome já existe ou se o projeto original existe.")
+    return {"status": "success", "old_name": project_name, "new_name": request.new_project_name}
+
 @app.get("/history/{project_name}", response_model=List[Dict[str, Any]])
 async def get_history(project_name: str):
     """Obtém o histórico de conversa de um projeto."""
@@ -306,22 +318,34 @@ async def list_agents():
     """Lista agentes disponíveis"""
     agents = [
         AgentInfo(
-            name="ideator",
+            name="ideator_saas",
             description="Especialista em ideação de SaaS, análise de mercado e definição de MVPs",
             default_model="qwen2.5:7b",
             capabilities=["saas_ideation", "market_analysis", "mvp_definition", "personas", "design_thinking"]
         ),
         AgentInfo(
-            name="architect",
+            name="architect_fullstack",
             description="Arquiteto de sistemas fullstack, especialista em design de arquitetura e seleção de tecnologias",
             default_model="llama3.1:8b-instruct",
             capabilities=["system_architecture", "tech_stack_selection", "database_design", "api_design", "scalability"]
         ),
         AgentInfo(
-            name="builder",
+            name="builder_web",
             description="Construtor de projetos multi-framework (React, FastAPI, Flutter, Vue, Node.js)",
             default_model="codegemma:7b",
             capabilities=["project_scaffolding", "code_generation", "framework_templates", "boilerplate", "multi_stack"]
+        ),
+        AgentInfo(
+            name="editor",
+            description="Agente especialista em modificar arquivos de código existentes.",
+            default_model="codegemma:7b",
+            capabilities=["code_editing", "refactoring", "file_manipulation"]
+        ),
+        AgentInfo(
+            name="researcher",
+            description="Agente especialista em pesquisar informações atualizadas na web.",
+            default_model="qwen2.5:7b",
+            capabilities=["web_search", "information_gathering", "synthesis"]
         ),
         AgentInfo(
             name="dev_fullstack",
@@ -334,6 +358,12 @@ async def list_agents():
             description="Agente reflexivo para análise, planejamento e otimização",
             default_model=REFLEX_MODEL,
             capabilities=["analysis", "planning", "review", "optimization", "strategic_thinking"]
+        ),
+        AgentInfo(
+            name="orchestrator",
+            description="Orquestrador que cria planos de ação para atingir objetivos complexos.",
+            default_model="llama3.1:8b-instruct",
+            capabilities=["planning", "task_decomposition", "agent_delegation"]
         )
     ]
     return agents
@@ -379,6 +409,7 @@ class TaskRequest(BaseModel):
     agent: str
     prompt: str
     project_name: str # Para dar contexto ao agente
+    step: int # Para referência
 
 @app.post("/execute_task")
 async def execute_task_endpoint(request: TaskRequest):

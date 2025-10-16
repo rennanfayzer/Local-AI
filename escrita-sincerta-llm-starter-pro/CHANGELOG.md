@@ -7,6 +7,32 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [2.2.0] - 2025-10-16
+
+### 🚀 Adicionado
+
+#### **Reformulação Completa da Interface Profissional (UI/UX)**
+- **Nova Biblioteca de Componentes**: Integração completa com **shadcn/ui**, substituindo todos os elementos HTML básicos por componentes React profissionais e estilizados.
+- **Design Moderno e Coeso**: Implementado um layout de três colunas com tema escuro, tipografia refinada, espaçamento consistente e ícones (`lucide-react`) para uma experiência de usuário superior.
+- **Novos Componentes**: Adicionados componentes reutilizáveis como `Card`, `Avatar`, `Input`, `Button` e `ScrollArea` para construir uma interface rica e moderna.
+- **Indicador de Carregamento**: Adicionado um estado de "Pensando..." com um ícone animado (`Loader2`) para dar feedback visual claro durante o processamento das requisições.
+
+#### **Melhorias de Funcionalidade e Gerenciamento**
+- **Renomear Projetos**: Implementada a funcionalidade de renomear projetos diretamente pela interface, com um novo endpoint (`POST /projects/{name}/rename`) na API.
+- **Execução de Plano Autônomo**: Adicionado o botão "Executar Plano Completo" e a lógica `handleExecuteFullPlan` no frontend para permitir a execução sequencial de todos os passos de um plano com um único clique.
+- **Feedback de Execução**: A interface agora mostra o status de cada passo de um plano (Pendente, Em Andamento, Concluído, Falhou) com indicadores visuais coloridos.
+
+### 🐛 Corrigido
+
+#### **Bugs Críticos e de Ambiente**
+- **Erro `Watchpack` no Windows**: Resolvido de forma definitiva o erro `EINVAL: invalid argument, lstat 'D:\\pagefile.sys'` implementando o `nodemon` para gerenciar o hot-reload do servidor de desenvolvimento Next.js.
+- **Erro de Módulo não Encontrado**: Corrigido o erro `Cannot find module '@/...'` ajustando a configuração de `paths` no `tsconfig.json` e limpando o cache do Next.js, garantindo que os atalhos de importação funcionem corretamente.
+- **Erro de API do Explorador de Arquivos**: O componente `FileTree` agora trata o erro 404 de forma elegante, exibindo uma mensagem amigável quando um projeto ainda não possui arquivos gerados, em vez de um erro vermelho.
+- **Erro de Modelo Corrompido no Ollama**: Diagnosticado e resolvido o `500 Internal Server Error` do Ollama, que era causado por um modelo de linguagem corrompido. O fluxo de trabalho agora inclui a remoção e o download novamente do modelo como passo de solução.
+- **Inconsistência de Nomes de Agentes**: Corrigidos os nomes dos agentes no endpoint `/agents` da API para corresponderem às chaves usadas internamente, eliminando os avisos de "Agente desconhecido".
+
+---
+
 ## [2.1.0] - 2025-10-16 (Em Desenvolvimento)
 
 ### ✨ Adicionado

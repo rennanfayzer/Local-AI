@@ -45,6 +45,34 @@ def get_conversation_history(project_name: str) -> List[Dict[str, Any]]:
         logger.error(f"Erro ao carregar histórico para '{project_name}': {e}")
         return []
 
+def rename_project(old_project_name: str, new_project_name: str) -> bool:
+    """Renomeia um projeto de conversa."""
+    _ensure_dir()
+    old_path = os.path.join(CONVERSATIONS_DIR, old_project_name)
+    new_path = os.path.join(CONVERSATIONS_DIR, new_project_name)
+
+    # Validações de segurança
+    if not os.path.abspath(old_path).startswith(os.path.abspath(CONVERSATIONS_DIR)) or \
+       not os.path.abspath(new_path).startswith(os.path.abspath(CONVERSATIONS_DIR)):
+        logger.error("Tentativa de renomear projeto fora do diretório permitido.")
+        return False
+
+    if not os.path.exists(old_path):
+        logger.warning(f"Tentativa de renomear um projeto que não existe: '{old_project_name}'")
+        return False
+    
+    if os.path.exists(new_path):
+        logger.warning(f"Tentativa de renomear para um projeto que já existe: '{new_project_name}'")
+        return False
+
+    try:
+        os.rename(old_path, new_path)
+        logger.info(f"Projeto '{old_project_name}' renomeado para '{new_project_name}'.")
+        return True
+    except OSError as e:
+        logger.error(f"Erro ao renomear o projeto '{old_project_name}': {e}")
+        return False
+
 def delete_project(project_name: str) -> bool:
     """Deleta um projeto de conversa, incluindo seu diretório e histórico."""
     _ensure_dir()
