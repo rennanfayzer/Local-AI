@@ -13,7 +13,11 @@ from tools.history import (
     get_conversation_history,
     save_conversation_history,
 )
-from tools.project_writer import get_generated_projects, get_project_files
+from tools.project_writer import (
+    get_generated_projects,
+    get_project_files,
+    delete_generated_project
+)
 
 # Sistema de voz removido para economizar espaço
 VOICE_ENABLED = False
@@ -227,10 +231,22 @@ async def create_project(request: ProjectRequest):
 
 @app.delete("/projects/{project_name}")
 async def delete_project(project_name: str):
-    """Deleta um projeto de conversa."""
-    success = delete_project_from_history(project_name)
-    if not success:
-        raise HTTPException(status_code=404, detail="Projeto não encontrado ou falha ao deletar.")
+    """Deleta um projeto, incluindo histórico e arquivos gerados."""
+    # Deleta o histórico da conversa
+    history_deleted = delete_project_from_history(project_name)
+
+    # Deleta os arquivos gerados do projeto
+    generated_project_deleted = delete_generated_project(project_name)
+
+    if not history_deleted and not generated_project_deleted:
+        raise HTTPException(status_code=404, detail="Projeto não encontrado.")
+
+    if not history_deleted:
+        logger.warning(f"Histórico do projeto '{project_name}' não foi deletado, mas os arquivos gerados sim.")
+
+    if not generated_project_deleted:
+        logger.warning(f"Arquivos gerados do projeto '{project_name}' não foram deletados, mas o histórico sim.")
+
     return {"status": "success", "project_name": project_name}
 
 @app.post("/projects/{project_name}/rename")

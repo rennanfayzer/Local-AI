@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Head from 'next/head';
-import { Send, Edit, PlusCircle, Bot, User, Loader2 } from 'lucide-react';
+import { Send, Edit, PlusCircle, Bot, User, Loader2, Trash2 } from 'lucide-react';
 
 import FileTree from '../components/FileTree';
 import { Button } from '@/components/ui/button';
@@ -122,6 +122,28 @@ const HomePage: React.FC = () => {
         }
       } catch (error: any) {
         alert(`Erro ao renomear projeto: ${error.message}`);
+      }
+    }
+  };
+
+  const handleDeleteProject = async (projectName: string) => {
+    if (window.confirm(`Tem certeza que deseja apagar o projeto "${projectName}"? Esta ação não pode ser desfeita.`)) {
+      try {
+        const response = await fetch(`http://localhost:8000/projects/${projectName}`, {
+          method: 'DELETE',
+        });
+        if (response.ok) {
+          await fetchProjects();
+          if (currentProjectName === projectName) {
+            setCurrentProjectName(null);
+            setMessages([{ role: 'assistant', content: 'Projeto apagado. Selecione ou crie um novo projeto.' }]);
+          }
+        } else {
+          const errorData = await response.json();
+          alert(`Erro ao apagar projeto: ${errorData.detail}`);
+        }
+      } catch (error: any) {
+        alert(`Erro ao apagar projeto: ${error.message}`);
       }
     }
   };
@@ -276,6 +298,14 @@ const HomePage: React.FC = () => {
                     onClick={() => handleRenameProject(project)}
                   >
                     <Edit className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="ml-1 h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={() => handleDeleteProject(project)}
+                  >
+                    <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
