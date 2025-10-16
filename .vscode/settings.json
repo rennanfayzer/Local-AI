@@ -1,0 +1,21 @@
+{
+    "geminicodeassist.agentDebugMode": true,
+    "geminicodeassist.agentYoloMode": true,
+    "geminicodeassist.project": "vertex-ai-runner-471417",
+    "cloudcode.apigee.dockerOptions": {
+        "environmentVariables": {
+            "XTERM": "xterm-256color"
+        },
+        "dns": "8.8.8.8",
+        "detached": true,
+        "privileged": true,
+        "labels": {},
+        "volumes": {},
+        "additionalArguments": ""
+    },
+    "chat.useChatSessionsForCloudButton": false,
+    "gemini-cli.debug.logging.enabled": true,
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "files.autoSaveWorkspaceFilesOnly": true,
+    "github.copilot.chat.newWorkspace.useContext7": true
+}

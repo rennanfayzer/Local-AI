@@ -1,0 +1,160 @@
+version: "3.9"
+
+services:
+  # PostgreSQL com extensão pgvector para memória vetorial
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: sincerta-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-sincerta}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-escrita_segura_2024}
+      POSTGRES_DB: ${POSTGRES_DB:-sincerta_memory}
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-sincerta} -d ${POSTGRES_DB:-sincerta_memory}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - sincerta-net
+
+  # Ollama - Runtime local para LLMs
+  # USANDO OLLAMA LOCAL - container desabilitado
+  # ollama:
+  #   image: ollama/ollama:latest
+  #   container_name: sincerta-ollama
+  #   restart: unless-stopped
+  #   environment:
+  #     - OLLAMA_ORIGINS=*
+  #     - OLLAMA_HOST=0.0.0.0
+  #     - OLLAMA_KEEP_ALIVE=24h
+  #   volumes:
+  #     - ollama_models:/root/.ollama
+  #   ports:
+  #     - "11434:11434"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+  #     interval: 30s
+  #     timeout: 10s
+  #     retries: 3
+  #   networks:
+  #     - sincerta-net
+  #   # Descomente para GPU (NVIDIA)
+  #   # deploy:
+  #   #   resources:
+  #   #     reservations:
+  #   #       devices:
+  #   #         - driver: nvidia
+  #   #           count: 1
+  #   #           capabilities: [gpu]
+
+  # API FastAPI Orquestradora
+  api:
+    build: 
+      context: ./api
+      dockerfile: Dockerfile
+    container_name: sincerta-api
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=${POSTGRES_USER:-sincerta}
+      - DB_PASSWORD=${POSTGRES_PASSWORD:-escrita_segura_2024}
+      - DB_NAME=${POSTGRES_DB:-sincerta_memory}
+      - API_PORT=8000
+      - API_DEBUG=${API_DEBUG:-true}
+      - API_RELOAD=${API_RELOAD:-true}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    volumes:
+      - ./data/docs:/app/data/docs:ro
+      - ./api/prompts:/app/prompts:ro
+      - api_logs:/app/logs
+    ports:
+      - "${API_PORT:-8000}:8000"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      # ollama:
+      #   condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - sincerta-net
+
+  # Open WebUI - Interface principal
+  openwebui:
+    image: ghcr.io/open-webui/open-webui:main
+    container_name: sincerta-webui
+    restart: unless-stopped
+    environment:
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - WEBUI_NAME=Escrita Sincerta LLM
+      - DEFAULT_LOCALE=pt-BR
+      - ENABLE_SIGNUP=false
+      - ENABLE_LOGIN_FORM=true
+      # Integração com API orquestradora
+      - OPENAI_API_BASE_URL=http://api:8000
+      - OPENAI_API_KEY=sincerta-local-key
+    volumes:
+      - openwebui_data:/app/backend/data
+    ports:
+      - "${OPENWEBUI_PORT:-3000}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+      # ollama:
+      #   condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - sincerta-net
+
+  # Redis para cache (opcional, mas recomendado)
+  redis:
+    image: redis:7-alpine
+    container_name: sincerta-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    networks:
+      - sincerta-net
+
+# Volumes nomeados para persistência
+volumes:
+  ollama_models:
+    driver: local
+  openwebui_data:
+    driver: local
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  api_logs:
+    driver: local
+
+# Rede dedicada para isolamento
+networks:
+  sincerta-net:
+    driver: bridge

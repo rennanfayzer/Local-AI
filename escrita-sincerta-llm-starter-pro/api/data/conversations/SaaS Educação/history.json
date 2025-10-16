@@ -1,0 +1,10 @@
+[
+  {
+    "role": "user",
+    "content": "Vamos iniciar, sugira ideias de saas para educação"
+  },
+  {
+    "role": "assistant",
+    "content": "**Contexto:**\n\nO cliente busca por soluções SaaS para a educação, com foco em ferramentas de gestão de cursos, agendamento de aulas online e acompanhamento do desempenho dos alunos.\n\n**Solução:**\n\nSugiro a criação de um SaaS chamado \"EduHub\", que oferece os seguintes recursos:\n\n* **Gestão de cursos:** Criação, edição e organização de cursos online.\n* **Agendamento de aulas online:** Realização de aulas ao vivo e gravadas.\n* **Acompanhamento de desempenho:** Monitoramento de indicadores como a frequência de aulas, desempenho acadêmico e engajamento dos alunos.\n* **Comunicação com alunos:** Plataforma de comunicação privada entre professores e alunos.\n* **Análise de dados:** Relatórios e gráficos para análise de dados de desempenho e tendências.\n\n**Exemplo/Código:**\n\n```python\nfrom fastapi import FastAPI\nfrom sqlalchemy import create_engine\n\napp = FastAPI()\n\n# Criação da base de dados\nengine = create_engine('postgresql://user:password@host:port/database')\n\n# Implementação da API\n@app.post(\"/cursos\")\ndef criar_curso(curso: Curso):\n    # Criação do curso no banco de dados\n    pass\n\n# ... outras APIs\n```\n\n**Checklist:**\n\n* API RESTful para criação, edição e gestão de cursos.\n* Sistema de agendamento de aulas online.\n* Plataforma de comunicação privada.\n* Análise de dados de desempenho dos alunos.\n* Dashboard para acompanhamento de indicadores."
+  }
+]

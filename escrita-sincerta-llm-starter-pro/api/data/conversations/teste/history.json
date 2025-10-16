@@ -1,0 +1,46 @@
+[
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  },
+  {
+    "role": "assistant",
+    "content": "Erro: Erro na API: Internal Server Error"
+  },
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  },
+  {
+    "role": "assistant",
+    "content": "Erro: Erro na API: Internal Server Error"
+  },
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  },
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  },
+  {
+    "role": "assistant",
+    "content": "CONTEXTO:\n\nO cliente deseja criar um portfólio pessoal utilizando a plataforma Next.js e o framework Tailwind CSS. O portfólio deve conter informações sobre o cliente, suas habilidades técnicas, projetos anteriores e contato.\n\nSOLUÇÃO:\n\nCrie um novo projeto Next.js:\n\nnpx create-next-app portfolio\n\nCopiar\n\nInstale o Tailwind CSS:\n\nnpm install tailwindcss postcss autoprefixer\n\nCopiar\n\nCrie as páginas:\n\nindex.js: Página inicial com informações sobre o cliente. skills.js: Página com as habilidades técnicas do cliente. projects.js: Página com projetos anteriores do cliente. contact.js: Página de contato.\n\nCrie os estilos usando Tailwind CSS:\n\n@tailwind base; @tailwind components; @tailwind utilities;\n\nCopiar\n\nCrie o conteúdo da página:\n\n// index.js\n\nNome do Cliente\n\nBreve descrição sobre o cliente.\n\nCopiar\n\nCrie o menu de navegação:\nInício Habilidades Projetos Contato\n\nCopiar\n\nPublique o projeto:\n\nnpm run build npm run export\n\nCopiar\n\nAcesse o portfólio:\n\nlocalhost:3000\n\nCopiar\n\nObservações:\n\nO código acima é apenas um exemplo. Você pode ajustar o conteúdo e estilos de acordo com suas necessidades. É importante utilizar a documentação da Next.js e do Tailwind CSS para obter instruções detalhadas sobre as funcionalidades de cada biblioteca."
+  },
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  },
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  },
+  {
+    "role": "assistant",
+    "content": "CONTEXTO:\n\nO cliente deseja criar um portfólio pessoal utilizando a plataforma Next.js e o framework Tailwind CSS. O portfólio deve conter informações sobre o cliente, suas habilidades técnicas, projetos anteriores e contato.\n\nSOLUÇÃO:\n\nCrie um novo projeto Next.js:\n\nnpx create-next-app portfolio\n\nCopiar\n\nInstale o Tailwind CSS:\n\nnpm install tailwindcss postcss autoprefixer\n\nCopiar\n\nCrie as páginas:\n\nindex.js: Página inicial com informações sobre o cliente. skills.js: Página com as habilidades técnicas do cliente. projects.js: Página com projetos anteriores do cliente. contact.js: Página de contato.\n\nCrie os estilos usando Tailwind CSS:\n\n@tailwind base; @tailwind components; @tailwind utilities;\n\nCopiar\n\nCrie o conteúdo da página:\n\n// index.js\n\nNome do Cliente\n\nBreve descrição sobre o cliente.\n\nCopiar\n\nCrie o menu de navegação: Início Habilidades Projetos Contato\n\nCopiar\n\nPublique o projeto:\n\nnpm run build npm run export\n\nCopiar\n\nAcesse o portfólio:\n\nlocalhost:3000\n\nCopiar\n\nObservações:\n\nO código acima é apenas um exemplo. Você pode ajustar o conteúdo e estilos de acordo com suas necessidades. É importante utilizar a documentação da Next.js e do Tailwind CSS para obter instruções detalhadas sobre as funcionalidades de cada biblioteca."
+  },
+  {
+    "role": "user",
+    "content": "Faça um projeto Next.js com Tailwind CSS para um portfólio."
+  }
+]
