@@ -14,9 +14,7 @@ from tools.history import (
     save_conversation_history,
 )
 from tools.project_writer import (
-    get_generated_projects,
     get_project_files,
-    delete_generated_project
 )
 
 # Sistema de voz removido para economizar espaço
@@ -231,22 +229,11 @@ async def create_project(request: ProjectRequest):
 
 @app.delete("/projects/{project_name}")
 async def delete_project(project_name: str):
-    """Deleta um projeto, incluindo histórico e arquivos gerados."""
-    # Deleta o histórico da conversa
-    history_deleted = delete_project_from_history(project_name)
-
-    # Deleta os arquivos gerados do projeto
-    generated_project_deleted = delete_generated_project(project_name)
-
-    if not history_deleted and not generated_project_deleted:
+    """Deleta um projeto, incluindo todo o seu conteúdo (histórico e arquivos)."""
+    success = delete_project_from_history(project_name)
+    if not success:
+        # A função delete_project agora retorna False se o projeto não existe
         raise HTTPException(status_code=404, detail="Projeto não encontrado.")
-
-    if not history_deleted:
-        logger.warning(f"Histórico do projeto '{project_name}' não foi deletado, mas os arquivos gerados sim.")
-
-    if not generated_project_deleted:
-        logger.warning(f"Arquivos gerados do projeto '{project_name}' não foram deletados, mas o histórico sim.")
-
     return {"status": "success", "project_name": project_name}
 
 @app.post("/projects/{project_name}/rename")
@@ -257,28 +244,30 @@ async def rename_project(project_name: str, request: RenameProjectRequest):
         raise HTTPException(status_code=400, detail="Falha ao renomear o projeto. Verifique se o novo nome já existe ou se o projeto original existe.")
     return {"status": "success", "old_name": project_name, "new_name": request.new_project_name}
 
-@app.get("/history/{project_name}", response_model=List[Dict[str, Any]])
-async def get_history(project_name: str):
-    """Obtém o histórico de conversa de um projeto."""
-    return get_conversation_history(project_name)
+@app.get("/projects/{project_name}/conversations", response_model=List[str])
+async def list_project_conversations(project_name: str):
+    """Lista todas as conversas de um projeto."""
+    # Esta função precisa ser adicionada em `tools.history`
+    from tools.history import list_conversations
+    return list_conversations(project_name)
 
-@app.post("/history/{project_name}")
-async def save_history(project_name: str, history: List[Dict[str, Any]] = Body(...)):
-    """Salva o histórico de conversa de um projeto."""
-    success = save_conversation_history(project_name, history)
+@app.get("/history/{project_name}/{conversation_name}", response_model=List[Dict[str, Any]])
+async def get_history(project_name: str, conversation_name: str):
+    """Obtém o histórico de uma conversa específica de um projeto."""
+    return get_conversation_history(project_name, conversation_name)
+
+@app.post("/history/{project_name}/{conversation_name}")
+async def save_history(project_name: str, conversation_name: str, history: List[Dict[str, Any]] = Body(...)):
+    """Salva o histórico de uma conversa específica de um projeto."""
+    success = save_conversation_history(project_name, conversation_name, history)
     if not success:
         raise HTTPException(status_code=500, detail="Falha ao salvar o histórico.")
     return {"status": "success"}
 
-# Endpoints para projetos gerados pelo Builder
-@app.get("/generated-projects", response_model=List[str])
-async def list_generated_projects():
-    """Lista todos os projetos gerados pelo Agente Builder."""
-    return get_generated_projects()
-
-@app.get("/generated-projects/{project_name}")
-async def get_generated_project_details(project_name: str):
-    """Retorna a estrutura de arquivos de um projeto gerado."""
+# Endpoint para obter a estrutura de arquivos de um projeto
+@app.get("/projects/{project_name}/files")
+async def get_project_file_tree(project_name: str):
+    """Retorna a estrutura de arquivos de um projeto."""
     files = get_project_files(project_name)
     if "error" in files:
         raise HTTPException(status_code=404, detail=files["error"])
